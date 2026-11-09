@@ -1,133 +1,145 @@
-#!/usr/bin/env python3
+#!/bin/bash
 # Copyright 2026 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
-"""Prepare AutoFirma's per-user loopback TLS identity and browser trust."""
-import configparser
-import fcntl
-import hashlib
-import os
-from pathlib import Path
-import subprocess
-import sys
-import tempfile
+# Per-user loopback TLS setup, following the AUR launcher approach.
+set -uo pipefail
 
+_af_prepare_identity() (
+	umask 077
+	local directory=$1 temporary pfx
+	pfx="${directory}/autofirma.pfx"
+	temporary=$(mktemp -d "${directory}/.tls-XXXXXX") || return
+	trap 'rm -rf -- "${temporary}"' EXIT
+	if [[ ! -e ${pfx} ]]; then
+		openssl req -x509 -newkey rsa:3072 -noenc \
+			-keyout "${temporary}/ca.key" -out "${temporary}/ca.pem" \
+			-sha256 -days 3650 -subj '/CN=AutoFirma ROOT' \
+			-addext 'basicConstraints=critical,CA:TRUE,pathlen:0' \
+			-addext 'keyUsage=critical,keyCertSign,cRLSign' \
+			2> "${temporary}/openssl.log" || return
+		openssl req -new -newkey rsa:2048 -noenc \
+			-keyout "${temporary}/server.key" -out "${temporary}/server.csr" \
+			-subj '/CN=127.0.0.1' 2> "${temporary}/openssl.log" || return
+		cat > "${temporary}/server.ext" <<- _EOF_ || return
+		basicConstraints=critical,CA:FALSE
+		keyUsage=critical,digitalSignature,keyEncipherment
+		extendedKeyUsage=serverAuth
+		subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1
+		_EOF_
+		openssl x509 -req -in "${temporary}/server.csr" \
+			-CA "${temporary}/ca.pem" -CAkey "${temporary}/ca.key" -CAcreateserial \
+			-out "${temporary}/server.pem" -days 3650 -sha256 \
+			-extfile "${temporary}/server.ext" 2> "${temporary}/openssl.log" || return
+		openssl pkcs12 -export -inkey "${temporary}/server.key" \
+			-in "${temporary}/server.pem" -certfile "${temporary}/ca.pem" \
+			-name socketautofirma -passout pass:654321 \
+			-out "${temporary}/autofirma.pfx" 2> "${temporary}/openssl.log" || return
+		mv -- "${temporary}/autofirma.pfx" "${pfx}" || return
+	fi
+	chmod 0600 "${pfx}" || return
+	# Recover the CA from an existing upstream/AUR identity without replacing it.
+	openssl pkcs12 -in "${pfx}" -passin pass:654321 -cacerts -nokeys \
+		2> "${temporary}/openssl.log" |
+		openssl x509 -outform PEM > "${temporary}/exported.pem" || return
+	if ! cmp -s "${temporary}/exported.pem" "${directory}/Autofirma_ROOT.cer"; then
+		mv -- "${temporary}/exported.pem" "${directory}/Autofirma_ROOT.cer" || return
+	fi
+)
 
-def command(*args, data=None, check=True):
-    return subprocess.run(args, input=data, stdout=subprocess.PIPE,
-                          stderr=subprocess.PIPE, check=check)
+_af_trim() {
+	REPLY=${1#"${1%%[![:space:]]*}"}
+	REPLY=${REPLY%"${REPLY##*[![:space:]]}"}
+}
 
+_af_profile_entry() {
+	[[ ${active} == 1 && -n ${profile_path} ]] || return 0
+	if [[ ${relative} != 0 && ${profile_path} != /* ]]; then
+		profiles["${root}/${profile_path}"]=1
+	else
+		profiles["${profile_path}"]=1
+	fi
+}
 
-def ensure_identity(directory):
-    pfx = directory / 'autofirma.pfx'
-    ca = directory / 'Autofirma_ROOT.cer'
-    if not pfx.exists():
-        with tempfile.TemporaryDirectory(prefix='.tls-', dir=directory) as temp:
-            temp = Path(temp)
-            command('openssl', 'req', '-x509', '-newkey', 'rsa:3072', '-noenc',
-                    '-keyout', str(temp / 'ca.key'), '-out', str(temp / 'ca.pem'),
-                    '-sha256', '-days', '3650', '-subj', '/CN=AutoFirma ROOT',
-                    '-addext', 'basicConstraints=critical,CA:TRUE,pathlen:0',
-                    '-addext', 'keyUsage=critical,keyCertSign,cRLSign')
-            command('openssl', 'req', '-new', '-newkey', 'rsa:2048', '-noenc',
-                    '-keyout', str(temp / 'server.key'), '-out', str(temp / 'server.csr'),
-                    '-subj', '/CN=127.0.0.1')
-            extensions = temp / 'server.ext'
-            extensions.write_text('basicConstraints=critical,CA:FALSE\n'
-                                  'keyUsage=critical,digitalSignature,keyEncipherment\n'
-                                  'extendedKeyUsage=serverAuth\n'
-                                  'subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1\n')
-            command('openssl', 'x509', '-req', '-in', str(temp / 'server.csr'),
-                    '-CA', str(temp / 'ca.pem'), '-CAkey', str(temp / 'ca.key'),
-                    '-CAcreateserial', '-out', str(temp / 'server.pem'),
-                    '-days', '3650', '-sha256', '-extfile', str(extensions))
-            command('openssl', 'pkcs12', '-export', '-inkey', str(temp / 'server.key'),
-                    '-in', str(temp / 'server.pem'), '-certfile', str(temp / 'ca.pem'),
-                    '-name', 'socketautofirma', '-passout', 'pass:654321',
-                    '-out', str(temp / 'autofirma.pfx'))
-            os.replace(temp / 'autofirma.pfx', pfx)
-    pfx.chmod(0o600)
-    # Reuse an existing identity, including certificates made by upstream/AUR.
-    chain = command('openssl', 'pkcs12', '-in', str(pfx), '-passin', 'pass:654321',
-                    '-cacerts', '-nokeys').stdout
-    pem = command('openssl', 'x509', '-outform', 'PEM', data=chain).stdout
-    if not ca.exists() or ca.read_bytes() != pem:
-        with tempfile.NamedTemporaryFile(dir=directory, delete=False) as output:
-            output.write(pem)
-            temporary = Path(output.name)
-        os.replace(temporary, ca)
-    return ca
+_af_read_profiles() {
+	local root=$1 active=0 relative=1 profile_path='' line key value REPLY
+	[[ -r ${root}/profiles.ini ]] || return 0
+	while IFS= read -r line || [[ -n ${line} ]]; do
+		line=${line#$'\xef\xbb\xbf'}
+		_af_trim "${line}"
+		line=${REPLY}
+		case ${line} in
+			''|'#'*|';'*) continue ;;
+			'['*']')
+				_af_profile_entry
+				active=0 relative=1 profile_path=''
+				[[ ${line} == '[Profile'*']' ]] && active=1
+				;;
+			*=*)
+				_af_trim "${line%%=*}"; key=${REPLY,,}
+				_af_trim "${line#*=}"; value=${REPLY}
+				case ${key} in
+					path) profile_path=${value} ;;
+					isrelative) relative=${value} ;;
+				esac
+				;;
+		esac
+	done < "${root}/profiles.ini"
+	_af_profile_entry
+}
 
+_af_has_identity() {
+	local database=$1 nickname=$2 fingerprint=$3 alias pem actual
+	for alias in "${nickname}" 'AutoFirma ROOT'; do
+		pem=$(certutil -L -d "${database}" -n "${alias}" -a 2>/dev/null) || continue
+		actual=$(printf '%s\n' "${pem}" | openssl x509 -outform DER 2>/dev/null | sha256sum) || continue
+		[[ ${actual%% *} == "${fingerprint}" ]] && return 0
+	done
+	return 1
+}
 
-def browser_databases(home):
-    config = Path(os.environ.get('XDG_CONFIG_HOME') or home / '.config')
-    data = Path(os.environ.get('XDG_DATA_HOME') or home / '.local/share')
-    candidates = {home / '.pki/nssdb', data / 'pki/nssdb'}
-    roots = {home / '.mozilla/firefox', config / 'mozilla/firefox',
-             home / '.config/mozilla/firefox', home / 'snap/firefox/common/.mozilla/firefox'}
-    for root in roots:
-        ini = root / 'profiles.ini'
-        if not ini.is_file():
-            continue
-        parser = configparser.ConfigParser(interpolation=None, strict=False)
-        try:
-            parser.read(ini, encoding='utf-8-sig')
-            for section in parser.sections():
-                if not section.startswith('Profile') or not parser.has_option(section, 'Path'):
-                    continue
-                path = Path(parser.get(section, 'Path'))
-                if parser.get(section, 'IsRelative', fallback='1') == '1':
-                    path = root / path
-                candidates.add(path)
-        except (configparser.Error, UnicodeError, OSError) as error:
-            print(f'AutoFirma: cannot read {ini}: {error}', file=sys.stderr)
-    for path in sorted(candidates):
-        if (path / 'cert9.db').is_file():
-            yield f'sql:{path}'
-        elif (path / 'cert8.db').is_file():
-            yield f'dbm:{path}'
+autofirma_browser_setup() (
+	umask 077
+	local user_home=$1 config_home=$2 data_home=$3
+	local directory="${1}/.afirma/Autofirma" lock_fd root path database fingerprint nickname failed=0
+	local -A profiles=()
+	mkdir -p -m 0700 -- "${directory}" || return
+	exec {lock_fd}> "${directory}/.browser-setup.lock" || return
+	flock -x "${lock_fd}" || return
+	if ! _af_prepare_identity "${directory}"; then
+		printf '%s\n' 'AutoFirma: cannot prepare the local TLS keystore; existing identities are preserved.' >&2
+		return 1
+	fi
+	fingerprint=$(openssl x509 -in "${directory}/Autofirma_ROOT.cer" -outform DER | sha256sum) || return
+	fingerprint=${fingerprint%% *}
+	nickname="AutoFirma ROOT (Esparto ${fingerprint:0:16})"
+	profiles["${user_home}/.pki/nssdb"]=1
+	profiles["${data_home}/pki/nssdb"]=1
+	for root in "${user_home}/.mozilla/firefox" "${config_home}/mozilla/firefox" \
+		"${user_home}/.config/mozilla/firefox" "${user_home}/snap/firefox/common/.mozilla/firefox"; do
+		_af_read_profiles "${root}"
+	done
+	for path in "${!profiles[@]}"; do
+		if [[ -f ${path}/cert9.db ]]; then
+			database="sql:${path}"
+		elif [[ -f ${path}/cert8.db ]]; then
+			database="dbm:${path}"
+		else
+			continue
+		fi
+		_af_has_identity "${database}" "${nickname}" "${fingerprint}" && continue
+		if ! certutil -A -d "${database}" -n "${nickname}" -t C,, -i "${directory}/Autofirma_ROOT.cer"; then
+			printf 'AutoFirma: cannot update %s; close the browser and launch AutoFirma again.\n' "${path}" >&2
+			failed=1
+		fi
+	done
+	return "${failed}"
+)
 
-
-def setup(home):
-    directory = home / '.afirma/Autofirma'
-    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-    with (directory / '.browser-setup.lock').open('a') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        ca = ensure_identity(directory)
-        der = command('openssl', 'x509', '-in', str(ca), '-outform', 'DER').stdout
-        nickname = 'AutoFirma ROOT (Esparto ' + hashlib.sha256(der).hexdigest()[:16] + ')'
-        failures = 0
-        for database in browser_databases(home):
-            present = False
-            for alias in (nickname, 'AutoFirma ROOT'):
-                existing = command('certutil', '-L', '-d', database, '-n', alias, '-a', check=False)
-                if existing.returncode == 0:
-                    parsed = command('openssl', 'x509', '-outform', 'DER', data=existing.stdout, check=False)
-                    if parsed.returncode == 0 and parsed.stdout == der:
-                        present = True
-                        break
-            if present:
-                continue
-            result = command('certutil', '-A', '-d', database, '-n', nickname,
-                             '-t', 'C,,', '-i', str(ca), check=False)
-            if result.returncode:
-                failures += 1
-                print(f'AutoFirma: browser setup failed for {database}. '
-                      'Close the browser and launch AutoFirma again.\n'
-                      + result.stderr.decode(errors='replace'), file=sys.stderr)
-        return 1 if failures else 0
-
-
-def main():
-    if os.geteuid() == 0:
-        print('AutoFirma browser setup must run as your normal desktop user.', file=sys.stderr)
-        return 1
-    os.umask(0o077)
-    try:
-        return setup(Path.home())
-    except (OSError, subprocess.CalledProcessError) as error:
-        print(f'AutoFirma: cannot prepare browser communication: {error}', file=sys.stderr)
-        return 1
-
-
-if __name__ == '__main__':
-    sys.exit(main())
+if [[ ${BASH_SOURCE[0]} == "${0}" ]]; then
+	if (( EUID == 0 )); then
+		printf '%s\n' 'AutoFirma browser setup must run as your normal desktop user.' >&2
+		exit 1
+	fi
+	autofirma_browser_setup "${HOME}" "${XDG_CONFIG_HOME:-${HOME}/.config}" \
+		"${XDG_DATA_HOME:-${HOME}/.local/share}"
+fi

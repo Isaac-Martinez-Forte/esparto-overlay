@@ -53,12 +53,12 @@ For an existing Esparto checkout, accept the experimental version and install:
 ```sh
 printf '%s\n' 'app-crypt/autofirma::esparto ~amd64' |
   sudo tee -a /etc/portage/package.accept_keywords/autofirma
-sudo emerge --ask --verbose '=app-crypt/autofirma-1.9.2-r1::esparto'
+sudo emerge --ask --verbose '=app-crypt/autofirma-1.9.2::esparto'
 ```
 
 This assumes `package.accept_keywords` is a directory. If it is a file, add
 the same keyword entry there. The package blocks `app-crypt/autofirma-bin`
-because both install the same application launcher and desktop entry;
+because both install the same application launcher and desktop entry.
 After deselecting the binary package, Portage can remove it as part of the
 replacement.
 
@@ -67,11 +67,13 @@ The desktop entry handles `afirma://` links.
 
 ## Browser setup
 
-Revision `1.9.2-r1` prepares browser communication automatically whenever
+The `1.9.2` ebuild prepares browser communication automatically whenever
 `autofirma` is launched, including launches through an `afirma://` link.
 Run it as your normal desktop user.
 
-The launcher invokes `autofirma-browser-setup` before the Gentoo Java launcher.
+The launcher invokes a Bash `autofirma-browser-setup` helper before the Gentoo
+Java launcher. It uses OpenSSL, `certutil` and `flock`; the application package
+does not add a Python dependency or Python target flags.
 It creates a private TLS identity under `~/.afirma/Autofirma` if none exists,
 using AutoFirma's expected PKCS#12 alias and password. Existing PKCS#12 files
 are reused; their CA is recovered from the chain when needed. Private keys
@@ -98,8 +100,8 @@ installation** remain available for explicit repairs.
 
 The desktop handler was checked with `xdg-mime query default
 x-scheme-handler/afirma`, which returned `autofirma.desktop` on the test system.
-An actual signing transaction on an electronic administration website has not
-been tested by the packaging checks.
+On 9 November 2026, the maintainer confirmed that a browser-based signing test
+worked with this Bash-based package.
 
 ## Validation
 
@@ -116,14 +118,14 @@ content with the original. `USE=test` enables this check in Portage.
 
 The upstream AutoFirma and Java-WebSocket unit test suites are not run.
 No real certificate, browser profile or system trust store is used by the
-packaging tests. GUI, real browser transactions and DNIe/smartcard use have not
-been tested.
+packaging tests. Browser integration was separately confirmed by the maintainer
+after installing the package. DNIe/smartcard use has not been tested.
 
-The browser bootstrap tests use real temporary NSS databases and check CA trust,
+The Bash browser bootstrap tests use real temporary NSS databases and check CA trust,
 TLS hostname/IP validation, Java PKCS#12 interoperability, legacy/current and
 absolute Firefox paths with spaces, identity reuse, newly created profiles and
 non-destructive handling of invalid existing keystores. They run with `USE=test`
-and in GitHub Actions. The revision was built and staged with Portage as well.
+and in GitHub Actions. The browser integration changes were built and staged with Portage as well.
 
 ## Maintaining the Maven archive
 

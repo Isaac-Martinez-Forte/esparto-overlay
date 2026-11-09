@@ -3,9 +3,7 @@
 
 EAPI=8
 
-PYTHON_COMPAT=( python3_{11..15} )
-
-inherit desktop java-pkg-2 python-single-r1 xdg
+inherit desktop java-pkg-2 xdg
 
 DESCRIPTION="Spanish government electronic signature client built from source"
 HOMEPAGE="https://github.com/ctt-gob-es/clienteafirma"
@@ -26,17 +24,15 @@ SLOT="0"
 KEYWORDS="~amd64"
 IUSE="test"
 RESTRICT="!test? ( test )"
-REQUIRED_USE="${PYTHON_REQUIRED_USE}"
 
 DEPEND="virtual/jdk:17"
 BDEPEND="
-	${PYTHON_DEPS}
 	dev-java/maven-bin:3.9
 	test? ( dev-libs/openssl )
 "
 RDEPEND="
-	${PYTHON_DEPS}
 	>=dev-libs/openssl-3.0.0
+	sys-apps/util-linux
 	!app-crypt/autofirma-bin
 	virtual/jre:17
 	dev-libs/nss[utils]
@@ -47,11 +43,6 @@ PATCHES=(
 	"${DISTDIR}/${P}-firefox-profiles.patch"
 	"${DISTDIR}/${P}-nss-secret-keys.patch"
 )
-
-pkg_setup() {
-	java-pkg-2_pkg_setup
-	python-single-r1_pkg_setup
-}
 
 src_prepare() {
 	default
@@ -83,7 +74,7 @@ src_compile() {
 }
 
 src_test() {
-	"${PYTHON}" "${FILESDIR}/autofirma-browser-test.py" || die
+	bash "${FILESDIR}/autofirma-browser-test.sh" || die
 	bash "${FILESDIR}/autofirma-smoke-test.sh" \
 		"${S}/afirma-simple/target/autofirma.jar" "${T}/smoke-test" || die
 }
@@ -91,7 +82,7 @@ src_test() {
 src_install() {
 	java-pkg_dojar afirma-simple/target/autofirma.jar
 	java-pkg_dojar afirma-ui-simple-configurator/target/autofirmaConfigurador.jar
-	python_newscript "${FILESDIR}/autofirma-browser-setup" autofirma-browser-setup
+	dobin "${FILESDIR}/autofirma-browser-setup"
 	sed "s|@EPREFIX@|${EPREFIX}|g" "${FILESDIR}/autofirma-launcher-pre" \
 		> "${T}/autofirma-launcher-pre" || die
 	java-pkg_dolauncher autofirma --jar autofirma.jar -pre "${T}/autofirma-launcher-pre" \
