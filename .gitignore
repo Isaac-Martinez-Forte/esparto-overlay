@@ -1,0 +1,12 @@
+# Local Portage configuration and generated metadata
+/esparto.conf
+/metadata/md5-cache/
+/metadata/cache/
+/.qa/
+# Build products, downloads and local logs
+/distfiles/
+/packages/
+/target/
+*.log
+__pycache__/
+*.py[cod]
