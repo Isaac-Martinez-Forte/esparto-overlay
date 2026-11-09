@@ -1,0 +1,36 @@
+name: Publish crate sources
+
+on:
+  push:
+    tags:
+      - 'sources-zapfast-*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: source-bundle-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Generate and verify reviewed source bundle
+        run: |
+          version="${GITHUB_REF_NAME#sources-zapfast-}"
+          python .github/scripts/build-release-bundle.py --version "$version" --workdir .qa/release
+      - name: Publish source archive
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            .qa/release/zapfast-*-crates.tar.xz .qa/release/SHA256SUMS \
+            --verify-tag --latest=false \
+            --title "ZapFast ${GITHUB_REF_NAME#sources-zapfast-}: dependency sources" \
+            --notes-file ".github/releases/${GITHUB_REF_NAME}.md"
