@@ -71,3 +71,10 @@ pkgcheck scan --repo "$PWD" --exit error
 ZapFast packaging is based on the source and `Cargo.lock` at
 https://github.com/crmne/zapfast/tree/v0.21.1 and its
 `packaging/arch/zapfast/PKGBUILD.in` recipe by Carmine Paolino.
+
+## AutoFirma dependency releases
+
+AutoFirma uses a separate `sources-autofirma-VERSION` tag and the
+`Publish Maven dependencies` workflow. It rebuilds an offline Maven repository
+from the reviewed `.github/maven-bundles/` inventory, verifies its checksum and
+publishes the archive. See [AutoFirma maintenance notes](autofirma.md).

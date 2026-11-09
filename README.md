@@ -14,6 +14,7 @@ experimental collection maintained for my own use.
 | Package | Version | Architecture | Build |
 | --- | --- | --- | --- |
 | `net-im/zapfast` | `0.21.1` | `~amd64` | From source, Rust >= 1.98 |
+| `app-crypt/autofirma` | `1.9.2` | `~amd64` | From source, JDK 17 and offline Maven |
 
 ZapFast's Git dependencies are pinned to the commits in the release's
 `Cargo.lock`. The 813 registry crates are grouped in a verified source archive hosted in
@@ -56,6 +57,9 @@ is also included.
 For ZapFast, a Secret Service provider and `xdg-desktop-portal` with a backend
 for your desktop are recommended. X11 and Wayland support are built together.
 Optional Omarchy integration is installed under `/usr/share/zapfast/omarchy`.
+
+For AutoFirma installation and browser setup, see the
+[AutoFirma notes](.github/docs/autofirma.md).
 
 See the [validation notes](.github/docs/validation.md) for what has been tested
 and the remaining limitations.

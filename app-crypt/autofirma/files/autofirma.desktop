@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=AutoFirma
+GenericName=Electronic Signature Client
+Comment=Sign documents and access Spanish electronic administration services
+Exec=autofirma %U
+Icon=autofirma
+Terminal=false
+Categories=Office;Java;
+StartupNotify=true
+StartupWMClass=autofirma
+MimeType=x-scheme-handler/afirma;
