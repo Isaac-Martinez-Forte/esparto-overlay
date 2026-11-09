@@ -1,0 +1,36 @@
+name: Publish Maven dependencies
+
+on:
+  push:
+    tags:
+      - 'sources-autofirma-*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: maven-bundle-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Regenerate and verify reviewed Maven repository
+        run: |
+          version="${GITHUB_REF_NAME#sources-autofirma-}"
+          python .github/scripts/build-maven-release.py --version "$version" --workdir .qa/maven-release
+      - name: Publish dependency archive
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            .qa/maven-release/autofirma-*-maven-deps.tar.xz .qa/maven-release/SHA256SUMS \
+            --verify-tag --latest=false \
+            --title "AutoFirma ${GITHUB_REF_NAME#sources-autofirma-}: Maven dependencies" \
+            --notes-file ".github/releases/${GITHUB_REF_NAME}.md"
