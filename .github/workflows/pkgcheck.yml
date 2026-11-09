@@ -32,5 +32,15 @@ jobs:
           done < <(find . -name '*.ebuild' -not -path './.qa/*' -print0)
       - name: Check packaging scripts
         run: python -m compileall -q .github/scripts
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install NSS test utilities
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libnss3-tools
+      - name: Test AutoFirma browser setup
+        run: python app-crypt/autofirma/files/autofirma-browser-test.py
       - name: Check overlay quality
         run: .qa/venv/bin/pkgcheck scan --repo "$PWD" --exit error

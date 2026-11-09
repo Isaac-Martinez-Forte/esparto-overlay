@@ -51,9 +51,9 @@ tries to keep an explicitly selected binary package installed.
 For an existing Esparto checkout, accept the experimental version and install:
 
 ```sh
-printf '%s\n' '=app-crypt/autofirma-1.9.2::esparto ~amd64' |
-  sudo tee /etc/portage/package.accept_keywords/autofirma
-sudo emerge --ask --verbose '=app-crypt/autofirma-1.9.2::esparto'
+printf '%s\n' 'app-crypt/autofirma::esparto ~amd64' |
+  sudo tee -a /etc/portage/package.accept_keywords/autofirma
+sudo emerge --ask --verbose '=app-crypt/autofirma-1.9.2-r1::esparto'
 ```
 
 This assumes `package.accept_keywords` is a directory. If it is a file, add
@@ -67,18 +67,39 @@ The desktop entry handles `afirma://` links.
 
 ## Browser setup
 
-Start AutoFirma as your normal user. For local browser communication, use
-**Tools → Restore installation** (**Herramientas → Restaurar instalación**).
-The upstream restore code can use the per-user directory when the installed
-application directory is not writable.
+Revision `1.9.2-r1` prepares browser communication automatically whenever
+`autofirma` is launched, including launches through an `afirma://` link.
+Run it as your normal desktop user.
 
-A separate `autofirma-configurator` launcher is included with upstream's
-per-user `-jnlp` mode. Run it only when you intend to configure the local
-certificates; it is never invoked automatically by the ebuild.
+The launcher invokes `autofirma-browser-setup` before the Gentoo Java launcher.
+It creates a private TLS identity under `~/.afirma/Autofirma` if none exists,
+using AutoFirma's expected PKCS#12 alias and password. Existing PKCS#12 files
+are reused; their CA is recovered from the chain when needed. Private keys
+are readable only by the user. Temporary CA signing keys are removed after
+generation.
 
-The package installs `certutil` through `dev-libs/nss[utils]`, but does not
-modify browser or system certificate stores during installation. Browser
-integration and signing with an actual personal certificate require user testing.
+The CA is imported into existing Firefox profiles found in both legacy and
+XDG configuration directories, the Snap Firefox location, and the user's
+shared NSS databases used by Chromium-family browsers. Both relative and
+absolute Firefox profile paths are supported. The helper uses a fingerprinted
+nickname and does not delete other certificates. It does not recreate an
+existing TLS identity or re-import an already present CA on every launch.
+New browser profiles are picked up on subsequent launches.
+
+If a running browser prevents a trust update, the launcher reports the error;
+close the browser and launch AutoFirma again. Local document signing remains
+available if browser initialization fails. An invalid existing PKCS#12 file
+is reported instead of being silently replaced.
+
+Certificate stores are configured per user at application startup, not during
+the root package installation. There is no system-wide trust installation.
+The optional upstream `autofirma-configurator` command and **Tools → Restore
+installation** remain available for explicit repairs.
+
+The desktop handler was checked with `xdg-mime query default
+x-scheme-handler/afirma`, which returned `autofirma.desktop` on the test system.
+An actual signing transaction on an electronic administration website has not
+been tested by the packaging checks.
 
 ## Validation
 
@@ -95,8 +116,14 @@ content with the original. `USE=test` enables this check in Portage.
 
 The upstream AutoFirma and Java-WebSocket unit test suites are not run.
 No real certificate, browser profile or system trust store is used by the
-packaging tests. GUI, browser integration and DNIe/smartcard use have not
+packaging tests. GUI, real browser transactions and DNIe/smartcard use have not
 been tested.
+
+The browser bootstrap tests use real temporary NSS databases and check CA trust,
+TLS hostname/IP validation, Java PKCS#12 interoperability, legacy/current and
+absolute Firefox paths with spaces, identity reuse, newly created profiles and
+non-destructive handling of invalid existing keystores. They run with `USE=test`
+and in GitHub Actions. The revision was built and staged with Portage as well.
 
 ## Maintaining the Maven archive
 

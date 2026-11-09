@@ -3,7 +3,8 @@
 # Distributed under the terms of the GNU General Public License v2
 set -euo pipefail
 jar_path=$1
-test_dir=$2
+test_dir=$(mktemp -d "${2%/}.XXXXXX")
+trap 'rm -rf -- "${test_dir}"' EXIT
 mkdir -p "${test_dir}/home"
 java_command=( "${JAVA_HOME:?}/bin/java"
     "-Duser.home=${test_dir}/home" "-Djava.util.prefs.userRoot=${test_dir}/prefs"

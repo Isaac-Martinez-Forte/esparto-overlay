@@ -3,7 +3,9 @@
 
 EAPI=8
 
-inherit desktop java-pkg-2 xdg
+PYTHON_COMPAT=( python3_{11..15} )
+
+inherit desktop java-pkg-2 python-single-r1 xdg
 
 DESCRIPTION="Spanish government electronic signature client built from source"
 HOMEPAGE="https://github.com/ctt-gob-es/clienteafirma"
@@ -24,13 +26,17 @@ SLOT="0"
 KEYWORDS="~amd64"
 IUSE="test"
 RESTRICT="!test? ( test )"
+REQUIRED_USE="${PYTHON_REQUIRED_USE}"
 
 DEPEND="virtual/jdk:17"
 BDEPEND="
+	${PYTHON_DEPS}
 	dev-java/maven-bin:3.9
 	test? ( dev-libs/openssl )
 "
 RDEPEND="
+	${PYTHON_DEPS}
+	>=dev-libs/openssl-3.0.0
 	!app-crypt/autofirma-bin
 	virtual/jre:17
 	dev-libs/nss[utils]
@@ -41,6 +47,11 @@ PATCHES=(
 	"${DISTDIR}/${P}-firefox-profiles.patch"
 	"${DISTDIR}/${P}-nss-secret-keys.patch"
 )
+
+pkg_setup() {
+	java-pkg-2_pkg_setup
+	python-single-r1_pkg_setup
+}
 
 src_prepare() {
 	default
@@ -72,6 +83,7 @@ src_compile() {
 }
 
 src_test() {
+	"${PYTHON}" "${FILESDIR}/autofirma-browser-test.py" || die
 	bash "${FILESDIR}/autofirma-smoke-test.sh" \
 		"${S}/afirma-simple/target/autofirma.jar" "${T}/smoke-test" || die
 }
@@ -79,7 +91,10 @@ src_test() {
 src_install() {
 	java-pkg_dojar afirma-simple/target/autofirma.jar
 	java-pkg_dojar afirma-ui-simple-configurator/target/autofirmaConfigurador.jar
-	java-pkg_dolauncher autofirma --jar autofirma.jar \
+	python_newscript "${FILESDIR}/autofirma-browser-setup" autofirma-browser-setup
+	sed "s|@EPREFIX@|${EPREFIX}|g" "${FILESDIR}/autofirma-launcher-pre" \
+		> "${T}/autofirma-launcher-pre" || die
+	java-pkg_dolauncher autofirma --jar autofirma.jar -pre "${T}/autofirma-launcher-pre" \
 		--java_args "-Djdk.tls.maxHandshakeMessageSize=65536"
 	java-pkg_dolauncher autofirma-configurator --jar autofirmaConfigurador.jar \
 		--pkg_args "-jnlp"
@@ -92,8 +107,7 @@ src_install() {
 
 pkg_postinst() {
 	xdg_pkg_postinst
-	elog "For browser integration, use Tools -> Restore installation in AutoFirma"
-	elog "as your normal user (Herramientas -> Restaurar instalacion)."
-	elog "An explicit per-user configurator is also available: autofirma-configurator."
-	elog "Certificate stores are not modified during package installation."
+	elog "Launch AutoFirma as your normal desktop user. Browser communication is"
+	elog "configured automatically at launch for existing Firefox/NSS profiles."
+	elog "If a browser blocks certificate updates, close it and launch AutoFirma again."
 }

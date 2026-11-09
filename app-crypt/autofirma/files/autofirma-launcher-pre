@@ -1,0 +1,4 @@
+# Initialize per-user browser communication before launching the Java client.
+if ! "@EPREFIX@/usr/bin/autofirma-browser-setup"; then
+	printf '%s\n' 'AutoFirma browser setup needs attention; document signing is still available.' >&2
+fi

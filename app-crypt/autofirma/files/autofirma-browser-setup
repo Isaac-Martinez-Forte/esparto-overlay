@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+# Copyright 2026 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+"""Prepare AutoFirma's per-user loopback TLS identity and browser trust."""
+import configparser
+import fcntl
+import hashlib
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
+
+def command(*args, data=None, check=True):
+    return subprocess.run(args, input=data, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, check=check)
+
+
+def ensure_identity(directory):
+    pfx = directory / 'autofirma.pfx'
+    ca = directory / 'Autofirma_ROOT.cer'
+    if not pfx.exists():
+        with tempfile.TemporaryDirectory(prefix='.tls-', dir=directory) as temp:
+            temp = Path(temp)
+            command('openssl', 'req', '-x509', '-newkey', 'rsa:3072', '-noenc',
+                    '-keyout', str(temp / 'ca.key'), '-out', str(temp / 'ca.pem'),
+                    '-sha256', '-days', '3650', '-subj', '/CN=AutoFirma ROOT',
+                    '-addext', 'basicConstraints=critical,CA:TRUE,pathlen:0',
+                    '-addext', 'keyUsage=critical,keyCertSign,cRLSign')
+            command('openssl', 'req', '-new', '-newkey', 'rsa:2048', '-noenc',
+                    '-keyout', str(temp / 'server.key'), '-out', str(temp / 'server.csr'),
+                    '-subj', '/CN=127.0.0.1')
+            extensions = temp / 'server.ext'
+            extensions.write_text('basicConstraints=critical,CA:FALSE\n'
+                                  'keyUsage=critical,digitalSignature,keyEncipherment\n'
+                                  'extendedKeyUsage=serverAuth\n'
+                                  'subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1\n')
+            command('openssl', 'x509', '-req', '-in', str(temp / 'server.csr'),
+                    '-CA', str(temp / 'ca.pem'), '-CAkey', str(temp / 'ca.key'),
+                    '-CAcreateserial', '-out', str(temp / 'server.pem'),
+                    '-days', '3650', '-sha256', '-extfile', str(extensions))
+            command('openssl', 'pkcs12', '-export', '-inkey', str(temp / 'server.key'),
+                    '-in', str(temp / 'server.pem'), '-certfile', str(temp / 'ca.pem'),
+                    '-name', 'socketautofirma', '-passout', 'pass:654321',
+                    '-out', str(temp / 'autofirma.pfx'))
+            os.replace(temp / 'autofirma.pfx', pfx)
+    pfx.chmod(0o600)
+    # Reuse an existing identity, including certificates made by upstream/AUR.
+    chain = command('openssl', 'pkcs12', '-in', str(pfx), '-passin', 'pass:654321',
+                    '-cacerts', '-nokeys').stdout
+    pem = command('openssl', 'x509', '-outform', 'PEM', data=chain).stdout
+    if not ca.exists() or ca.read_bytes() != pem:
+        with tempfile.NamedTemporaryFile(dir=directory, delete=False) as output:
+            output.write(pem)
+            temporary = Path(output.name)
+        os.replace(temporary, ca)
+    return ca
+
+
+def browser_databases(home):
+    config = Path(os.environ.get('XDG_CONFIG_HOME') or home / '.config')
+    data = Path(os.environ.get('XDG_DATA_HOME') or home / '.local/share')
+    candidates = {home / '.pki/nssdb', data / 'pki/nssdb'}
+    roots = {home / '.mozilla/firefox', config / 'mozilla/firefox',
+             home / '.config/mozilla/firefox', home / 'snap/firefox/common/.mozilla/firefox'}
+    for root in roots:
+        ini = root / 'profiles.ini'
+        if not ini.is_file():
+            continue
+        parser = configparser.ConfigParser(interpolation=None, strict=False)
+        try:
+            parser.read(ini, encoding='utf-8-sig')
+            for section in parser.sections():
+                if not section.startswith('Profile') or not parser.has_option(section, 'Path'):
+                    continue
+                path = Path(parser.get(section, 'Path'))
+                if parser.get(section, 'IsRelative', fallback='1') == '1':
+                    path = root / path
+                candidates.add(path)
+        except (configparser.Error, UnicodeError, OSError) as error:
+            print(f'AutoFirma: cannot read {ini}: {error}', file=sys.stderr)
+    for path in sorted(candidates):
+        if (path / 'cert9.db').is_file():
+            yield f'sql:{path}'
+        elif (path / 'cert8.db').is_file():
+            yield f'dbm:{path}'
+
+
+def setup(home):
+    directory = home / '.afirma/Autofirma'
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with (directory / '.browser-setup.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        ca = ensure_identity(directory)
+        der = command('openssl', 'x509', '-in', str(ca), '-outform', 'DER').stdout
+        nickname = 'AutoFirma ROOT (Esparto ' + hashlib.sha256(der).hexdigest()[:16] + ')'
+        failures = 0
+        for database in browser_databases(home):
+            present = False
+            for alias in (nickname, 'AutoFirma ROOT'):
+                existing = command('certutil', '-L', '-d', database, '-n', alias, '-a', check=False)
+                if existing.returncode == 0:
+                    parsed = command('openssl', 'x509', '-outform', 'DER', data=existing.stdout, check=False)
+                    if parsed.returncode == 0 and parsed.stdout == der:
+                        present = True
+                        break
+            if present:
+                continue
+            result = command('certutil', '-A', '-d', database, '-n', nickname,
+                             '-t', 'C,,', '-i', str(ca), check=False)
+            if result.returncode:
+                failures += 1
+                print(f'AutoFirma: browser setup failed for {database}. '
+                      'Close the browser and launch AutoFirma again.\n'
+                      + result.stderr.decode(errors='replace'), file=sys.stderr)
+        return 1 if failures else 0
+
+
+def main():
+    if os.geteuid() == 0:
+        print('AutoFirma browser setup must run as your normal desktop user.', file=sys.stderr)
+        return 1
+    os.umask(0o077)
+    try:
+        return setup(Path.home())
+    except (OSError, subprocess.CalledProcessError) as error:
+        print(f'AutoFirma: cannot prepare browser communication: {error}', file=sys.stderr)
+        return 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())
