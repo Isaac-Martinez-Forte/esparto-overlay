@@ -15,9 +15,10 @@ The subsequent installation through `emerge` also completed: `/usr/bin/zapfast`
 reports version 0.21.1 and Portage records repository `esparto`. The graphical
 interface, WhatsApp account linking and upstream test suite have not been tested.
 
-A [crate source bundle](crate-bundles.md) has also been prepared and tested in
-an isolated repository. The active ebuild still uses individual crate downloads
-until the bundle has a stable hosting URL.
+The [crate source bundle](crate-bundles.md) is now hosted in a GitHub Release.
+Portage fetched the public archive into a fresh directory and completed source
+preparation. The active ebuild uses this bundle and keeps the same pinned Git
+dependencies. No additional full build or GUI test has been performed.
 
 Local build files and logs are excluded from the repository. The build check
 disabled ccache because its global directory was not writable by the test

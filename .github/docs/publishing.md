@@ -1,45 +1,58 @@
 # Publishing notes
 
-Personal notes for uploading this overlay. The local Git repository uses
-`main`; no GitHub remote has been configured yet.
+Esparto is hosted at https://github.com/Isaac-Martinez-Forte/esparto-overlay.
+The Git branch is `main`; `origin` uses the owner's SSH URL.
+This remains a personal overlay. No listing with Gentoo or Zugaina has been
+requested.
 
 ## Contact and Git identity
 
 The package maintainer is Isaac Martínez <isaac.martinez@upct.es>.
 This contact can differ from the email used to author Git commits.
 
-## Uploading to GitHub
+## Updating the overlay
 
-Create an empty repository named `esparto-overlay` under the chosen account.
-Review the staged files and your Git author identity before the first commit:
+Review and commit the intended source changes, then push `main`:
 
 ```sh
 git status --short
+git diff
+git add PATHS_TO_CHANGED_FILES
 git diff --cached
-git var GIT_AUTHOR_IDENT
-git commit -m 'Initial Esparto overlay'
-git remote add origin 'git@github.com:YOUR_ACCOUNT/esparto-overlay.git'
-git push -u origin main
+git commit -m 'Describe the package change'
+git push origin main
 ```
 
-Replace `YOUR_ACCOUNT` with the actual account. For later changes, stage the
-intended files and use a commit message describing the change.
-The machine-specific `esparto.conf`, QA environments and generated metadata
-caches are excluded from Git.
+`PATHS_TO_CHANGED_FILES` is a placeholder. The machine-specific `esparto.conf`,
+QA environments, generated metadata and source archives are excluded from Git.
+The GitHub workflow checks syntax and package quality; it does not compile
+packages. Real build and functional checks remain part of package maintenance.
 
-## Optional public use
+## Dependency source releases
 
-Once uploaded, the overlay can be added by URL:
+For each new ZapFast dependency bundle:
 
-```sh
-sudo eselect repository add esparto git 'https://github.com/YOUR_ACCOUNT/esparto-overlay.git'
-sudo emaint sync -r esparto
-```
+1. Review the upstream source archive and `Cargo.lock`.
+2. Generate the bundle locally with `.github/scripts/bundle-crates.py`.
+3. Record the source and bundle SHA-256 values in
+   `.github/source-bundles/zapfast-VERSION.json`, following the existing entry.
+4. Add release notes in `.github/releases/sources-zapfast-VERSION.md`.
+5. Commit and push the configuration and scripts before pushing an annotated
+   `sources-zapfast-VERSION` tag.
 
-Listing the overlay with Gentoo and checking its indexing on Zugaina can be
-considered later. Neither has been requested yet.
+The tag starts the `Publish crate sources` workflow. It verifies the upstream
+archive, downloads crates and verifies their lockfile checksums, regenerates the
+bundle and checks that its SHA-256 matches the reviewed local archive. Only
+then does it publish a source-only Release with the archive and `SHA256SUMS`.
+The workflow uses GitHub's built-in token; no personal access token is needed.
 
-## Local checks
+After publication, test the public asset URL with Portage before updating
+`SRC_URI` and regenerating the package `Manifest`. Keep published assets
+immutable and retain those referenced by existing ebuilds.
+
+See [crate bundle notes](crate-bundles.md) for source format and local validation.
+
+## Local QA
 
 From the repository root, with Portage and `app-portage/pkgcheck` installed:
 
@@ -48,15 +61,6 @@ bash -n net-im/zapfast/zapfast-0.21.1.ebuild
 ebuild net-im/zapfast/zapfast-0.21.1.ebuild manifest
 pkgcheck scan --repo "$PWD" --exit error
 ```
-
-The GitHub workflow runs syntax and QA checks, not package builds. Its QA tool
-versions are pinned as a compatible set and should be reviewed together when
-updating them. A real installation and functional checks are still needed
-when changing a package.
-
-A verified crate source bundle and an isolated ebuild candidate are prepared
-locally. See [crate bundle notes](crate-bundles.md) for generation, validation
-and the hosting step needed before switching the active ebuild.
 
 ## Packaging references
 

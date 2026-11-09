@@ -5,9 +5,11 @@ snapshots. Grouping the registry sources into one archive reduces Portage's
 source file count from 821 to 9: the application, the crate bundle, and seven
 Git archives. This reduces download overhead, not the amount of code to build.
 
-The active ebuild still uses individual crates until a stable public URL for
-the bundle is available. Nothing has been uploaded. The isolated candidate
-and generated archives are under `.qa/crate-tarball/`, excluded from Git.
+The active ebuild uses the archive published in the
+[dependency source Release](https://github.com/Isaac-Martinez-Forte/esparto-overlay/releases/tag/sources-zapfast-0.21.1).
+GitHub Actions regenerated it and verified its SHA-256 against the locally
+reviewed archive before publishing. Local test files and archives under `.qa/`
+are excluded from Git.
 
 ## Generate the bundle
 
@@ -32,7 +34,7 @@ second archive under another filename and compare its SHA-256.
 
 ## Prepare an ebuild candidate
 
-Once a stable URL has been chosen, create a separate candidate:
+For a future version, create a separate candidate using its published asset URL:
 
 ```sh
 python3 .github/scripts/prepare-bundled-ebuild.py \
@@ -46,8 +48,7 @@ adds the bundle to `SRC_URI`, and retains the pinned `GIT_CRATES`, licenses
 and build phases. Review the candidate before using it in the overlay.
 Regenerate its `Manifest` and validate it in a separate repository.
 
-A GitHub Release asset is one possible hosting location when the repository
-is eventually published. The generated archive belongs in source hosting,
+Bundles are hosted as GitHub Release assets. The generated archive belongs in source hosting,
 not in Git or the package's `files/` directory. Keep release assets immutable;
 use a new filename if their contents change.
 
@@ -64,8 +65,13 @@ resolved the candidate's dependency graph offline. The archive's extracted
 build, and the resolved lockfiles match. Two independent bundle generations
 produced byte-identical archives. The bundled candidate passes `pkgcheck`
 without warnings, including no `TooManyCrates` warning.
-This validates source preparation; a full build of the bundled candidate has
-not been repeated.
+The public GitHub asset was also downloaded by Portage into a fresh distfiles
+directory and checked against the reviewed hash. Unpack, prepare and configure
+completed, and Cargo resolved the same dependency graph offline. This validates
+source preparation; a full build with the bundled sources has not been repeated.
+
+The [publishing workflow](publishing.md#dependency-source-releases) regenerates
+reviewed archives from versioned specifications.
 
 References:
 

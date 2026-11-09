@@ -16,8 +16,21 @@ experimental collection maintained for my own use.
 | `net-im/zapfast` | `0.21.1` | `~amd64` | From source, Rust >= 1.98 |
 
 ZapFast's Git dependencies are pinned to the commits in the release's
-`Cargo.lock`. Portage downloads the sources before building, and
-`cargo.eclass` builds offline.
+`Cargo.lock`. The 813 registry crates are grouped in a verified source archive hosted in
+[GitHub Releases](https://github.com/Isaac-Martinez-Forte/esparto-overlay/releases/tag/sources-zapfast-0.21.1).
+Portage downloads nine source files in total, and `cargo.eclass` builds offline.
+
+## Adding the overlay
+
+For a new installation:
+
+```sh
+sudo eselect repository add esparto git https://github.com/Isaac-Martinez-Forte/esparto-overlay.git
+sudo emaint sync -r esparto
+```
+
+This is a personal overlay, not currently listed with Gentoo. If you already
+have a local checkout registered as `esparto`, use that existing configuration.
 
 ## Using a local checkout
 
