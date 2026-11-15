@@ -1,5 +1,33 @@
 # Crate source bundles
 
+## ZapFast 0.21.2 update
+
+The new ebuild pins seven Git snapshots and 816 registry crates from
+`v0.21.2/Cargo.lock`. Portage still needs nine source files in total. Fastframe
+moves to 0.16.1 and the WhatsApp Rust dependencies move to the upstream
+`oxidezap/whatsapp-rust` repository at the locked commit. Rust >= 1.98 remains
+required.
+
+The registry archive was generated twice from checksum-verified `.crate`
+files; both outputs are byte-identical. Size: 106,312,484 bytes. SHA-256:
+
+```text
+534d60997c95b335d626c35cdfa651eb049d76fe7a0aa865e4a2f009212dd6ee
+```
+
+Local validation on 15 November 2026 completed a full offline release build
+and staged installation using the bundled sources. The staged binary reports
+`zapfast 0.21.2`; `--help`, shared-library resolution and desktop entry
+validation pass. The candidate overlay passes `pkgcheck` without warnings.
+The optional test suite and an authenticated WhatsApp session were not run.
+
+The release specification and source-only release notes are prepared for
+`sources-zapfast-0.21.2`. Its public asset must be published and fetched
+successfully before this update is advertised as available online. The
+previous release asset remains unchanged for the 0.21.1 ebuild.
+
+## Previous bundle: ZapFast 0.21.1
+
 ZapFast 0.21.1 has 813 registry crates and dependencies from seven Git
 snapshots. Grouping the registry sources into one archive reduces Portage's
 source file count from 821 to 9: the application, the crate bundle, and seven

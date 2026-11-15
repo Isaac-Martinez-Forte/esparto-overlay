@@ -1,0 +1,9 @@
+{
+  "package": "zapfast",
+  "version": "0.21.2",
+  "source_url": "https://github.com/crmne/zapfast/archive/refs/tags/v0.21.2.tar.gz",
+  "source_sha256": "1b1b0dad8184148ca2834d8c500d2f72e1869d4b72afc1d43629db121624c3c7",
+  "lock_member": "zapfast-0.21.2/Cargo.lock",
+  "archive_name": "zapfast-0.21.2-crates.tar.xz",
+  "archive_sha256": "534d60997c95b335d626c35cdfa651eb049d76fe7a0aa865e4a2f009212dd6ee"
+}
