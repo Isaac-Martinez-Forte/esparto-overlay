@@ -1,5 +1,30 @@
 # Crate source bundles
 
+## ZapFast 0.21.3 update
+
+The update uses 808 checksum-verified registry crates and seven pinned Git
+snapshots from upstream's Cargo.lock. Fastframe moves to 0.17.1, and the
+egui, winit and whatsapp-rust snapshots also change. Rust >= 1.98 remains
+required. The SQLCipher source update is covered by MIT, BSD and public-domain
+licenses; its bundled public-domain notices are reflected in the ebuild.
+The registry source archive is 103,610,244 bytes. SHA-256:
+
+```text
+0e8262a3bc680579e05bbbdf0e2f27a7b98b737290706c10d52a0839e40c06b5
+```
+
+Two independent local bundle generations and a run of the release builder
+with freshly downloaded crates produced identical archives. All 47 Git package
+paths were verified against the pinned source snapshots. The candidate overlay
+passes pkgcheck without warnings.
+
+The source release specification and notes are prepared locally. The public
+archive must be published and its download verified before updating main.
+Local validation on 18 November 2026 completed a full offline release build
+and staged installation. The staged binary reports `zapfast 0.21.3`; `--help`,
+shared-library resolution and desktop entry validation pass. The optional
+test suite and an authenticated WhatsApp session were not run.
+
 ## ZapFast 0.21.2 update
 
 The new ebuild pins seven Git snapshots and 816 registry crates from

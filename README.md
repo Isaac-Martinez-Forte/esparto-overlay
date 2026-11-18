@@ -13,13 +13,13 @@ experimental collection maintained for my own use.
 
 | Package | Version | Architecture | Build |
 | --- | --- | --- | --- |
-| `net-im/zapfast` | `0.21.2` | `~amd64` | From source, Rust >= 1.98 |
+| `net-im/zapfast` | `0.21.3` | `~amd64` | From source, Rust >= 1.98 |
 | `app-crypt/autofirma` | `1.9.2` | `~amd64` | From source, JDK 17 and offline Maven |
 | `app-crypt/configuradorfnmt` | `5.1.2` | `~amd64` | Official prebuilt JARs, Java >= 21 |
 
 ZapFast's Git dependencies are pinned to the commits in the release's
-`Cargo.lock`. The 816 registry crates are grouped in a verified source archive hosted in
-[GitHub Releases](https://github.com/Isaac-Martinez-Forte/esparto-overlay/releases/tag/sources-zapfast-0.21.2).
+`Cargo.lock`. The 808 registry crates are grouped in a verified source archive hosted in
+[GitHub Releases](https://github.com/Isaac-Martinez-Forte/esparto-overlay/releases/tag/sources-zapfast-0.21.3).
 Portage downloads nine source files in total, and `cargo.eclass` builds offline.
 
 ## Adding the overlay
